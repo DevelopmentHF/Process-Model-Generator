@@ -81,16 +81,17 @@ trace_t* make_empty_trace(void);
 trace_t* insert_at_foot(trace_t* trace, char letter);
 int is_trace_present(trace_t* trace, trace_t** list, int num_traces, int* index);
 int is_empty_trace(trace_t* trace);
+void stage0_printer(log_t* log);
 
 /* WHERE IT ALL HAPPENS ------------------------------------------------------*/
 int
 main(int argc, char *argv[]) {
     
     /* First, store the input event log for later use */
-    // maybe use a 'get trace' equivalent of getword ??
+    
     log_t inputs;
     log_build(&inputs);
-    printf("Num distict traces: %d\n", inputs.num_distinct);
+    stage0_printer(&inputs);
 
     return EXIT_SUCCESS;        // remember, algorithms are fun!!!
 }
@@ -106,20 +107,20 @@ trace_build() {     // remove this argyment and put it in the log_build()
         if (isalpha(event)) {
             /* BUILD EACH TRACE IN HERE */
             letter = event;
-            printf("%c", letter);
+            // printf("%c", letter);
            // insert_at_tail function listops.c
            insert_at_foot(trace, letter);
 
         } else if (event != ','){
             // printf("\nHead: %c, Foot: %c\n", trace->head->actn, trace->foot->actn);
-            printf("\n");
+            // printf("\n");
             // return an int to signal to call again in main while loop
             return trace;
         }
         event = getchar();
     }
     if (event == EOF) {
-        printf("\n");
+        // printf("\n");
         return trace;
     } else {
         return NULL;
@@ -148,8 +149,8 @@ log_build(log_t* input_log) {
         if (found_flag == NOT_FOUND) {
 
             cur_trace->freq=1;
-            printf("NOT SEEN\n");
-            printf("cur freq: %d\n\n", cur_trace->freq);
+            // printf("NOT SEEN\n");
+            // printf("cur freq: %d\n\n", cur_trace->freq);
             // Check if malloc'd list is big enough
             if (num_distinct == current_size) {
                 current_size *= 2;
@@ -166,12 +167,12 @@ log_build(log_t* input_log) {
             // if it is found, need to change frquency of struct object from BEFORE
             // cur_trace->freq;
             trace_list[found_index]->freq++;
-            printf("ALREADY SEEN\n");
-            printf("cur freq: %d\n\n", trace_list[found_index]->freq);
+            // printf("ALREADY SEEN\n");
+            // printf("cur freq: %d\n\n", trace_list[found_index]->freq);
         } 
 
         // Incremental operations
-        printf("------");
+        // printf("------");
         cur_trace = trace_build();
     }
     input_log->traces = trace_list;
@@ -260,8 +261,19 @@ is_trace_present(trace_t* trace, trace_t** list, int num_traces, int* index) {
     return NOT_FOUND;
 }
 
+/* change name to not copy alistair */
 int
 is_empty_trace(trace_t* trace) {
     assert(trace != NULL);
     return trace->head==NULL;
+}
+
+void
+stage0_printer(log_t* log) {
+    /* Print Header */
+    printf("==STAGE 0============================\n");
+    /* Print number of distinct events */
+
+    /* Print number of distinct traces */
+    printf("Number of distinct traces: %d\n", log->num_distinct);
 }
