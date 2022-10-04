@@ -66,7 +66,7 @@ typedef struct {                // a trace is a linked list of events       // I
 
 typedef struct {                // an event log is an array of distinct traces
                                 //     sorted lexicographically (alphabetically? check this henry.)
-    trace_t* traces;            // an array of traces
+    trace_t** traces;            // an array of pointers to traces
     int      num_distinct;      // the number of distinct traces in this log
     int      capacity;          // the capacity of this event log as the number
                                 //     of  distinct traces it can hold
@@ -79,7 +79,7 @@ trace_t* trace_build();
 void log_build(log_t* input_log);
 trace_t* make_empty_trace(void);
 trace_t* insert_at_foot(trace_t* trace, char letter);
-int is_trace_present(trace_t* trace, trace_t** list, int num_traces);
+int is_trace_present(trace_t* trace, trace_t** list, int num_traces, int* index);
 int is_empty_trace(trace_t* trace);
 
 /* WHERE IT ALL HAPPENS ------------------------------------------------------*/
@@ -90,6 +90,7 @@ main(int argc, char *argv[]) {
     // maybe use a 'get trace' equivalent of getword ??
     log_t inputs;
     log_build(&inputs);
+    printf("Num distict traces: %d\n", inputs.num_distinct);
 
     return EXIT_SUCCESS;        // remember, algorithms are fun!!!
 }
@@ -140,34 +141,42 @@ log_build(log_t* input_log) {
     trace_t* cur_trace = trace_build();
     while(is_empty_trace(cur_trace) != 1) {
         // Check if this trace is already present in the array
-        int found_flag = is_trace_present(cur_trace, trace_list, num_distinct);
+        // also could just freq frequency of a thing first to make more efficient
+        int found_index;
+        int found_flag = is_trace_present(cur_trace, trace_list, num_distinct, &found_index);
         
         if (found_flag == NOT_FOUND) {
-            cur_trace->freq=0;
-            printf("NOT SEEN\n\n");
+
+            cur_trace->freq=1;
+            printf("NOT SEEN\n");
+            printf("cur freq: %d\n\n", cur_trace->freq);
+            // Check if malloc'd list is big enough
+            if (num_distinct == current_size) {
+                current_size *= 2;
+                trace_list = (trace_t**)realloc(trace_list, current_size*sizeof(*trace_list));
+                assert(trace_list);
+            }
+
+            trace_list[num_distinct] = (trace_t*)malloc(sizeof(trace_t*));
+            assert(trace_list[num_distinct]);
+            trace_list[num_distinct] = cur_trace;
+            num_distinct++;
 
         } else if (found_flag == FOUND) {
-            cur_trace->freq = cur_trace->freq + 1;
-            printf("ALREADY SEEN %d times\n\n", cur_trace->freq);
+            // if it is found, need to change frquency of struct object from BEFORE
+            // cur_trace->freq;
+            trace_list[found_index]->freq++;
+            printf("ALREADY SEEN\n");
+            printf("cur freq: %d\n\n", trace_list[found_index]->freq);
         } 
-        
-        // Check if malloc'd list is big enough
-        if (num_distinct == current_size) {
-            current_size *= 2;
-            trace_list = (trace_t**)realloc(trace_list, current_size*sizeof(*trace_list));
-            assert(trace_list);
-        }
-
-        trace_list[num_distinct] = (trace_t*)malloc(sizeof(trace_t*));
-        assert(trace_list[num_distinct]);
-        trace_list[num_distinct] = cur_trace;
-        num_distinct++;
 
         // Incremental operations
         printf("------");
         cur_trace = trace_build();
     }
-
+    input_log->traces = trace_list;
+    input_log->num_distinct = num_distinct;
+    // input_log->capacity
 }
 
 /* make_empty_trace() modified from Alistair Moffat, as an example for the book
@@ -217,12 +226,13 @@ insert_at_foot(trace_t* trace, char letter) {
 }
 
 int
-is_trace_present(trace_t* trace, trace_t** list, int num_traces) {
+is_trace_present(trace_t* trace, trace_t** list, int num_traces, int* index) {
     // Case where the list is empty
     if (num_traces < 1) {
         return NOT_FOUND;
     }
 
+    // needs to also return a indicie
     int equal_flag;
 
     for (int i=0; i<num_traces; i++) {
@@ -243,6 +253,7 @@ is_trace_present(trace_t* trace, trace_t** list, int num_traces) {
         }
        
         if (equal_flag == EQUAL) {
+            *index = i;
             return FOUND;
         }
     }
