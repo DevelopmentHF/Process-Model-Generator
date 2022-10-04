@@ -81,6 +81,8 @@ trace_t* make_empty_trace(void);
 trace_t* insert_at_foot(trace_t* trace, char letter);
 int is_trace_present(trace_t* trace, trace_t** list, int num_traces, int* index);
 int is_empty_trace(trace_t* trace);
+int find_num_events(log_t* log);
+int get_trace_len(trace_t* trace);
 void stage0_printer(log_t* log);
 
 /* WHERE IT ALL HAPPENS ------------------------------------------------------*/
@@ -88,7 +90,6 @@ int
 main(int argc, char *argv[]) {
     
     /* First, store the input event log for later use */
-    
     log_t inputs;
     log_build(&inputs);
     stage0_printer(&inputs);
@@ -107,9 +108,7 @@ trace_build() {     // remove this argyment and put it in the log_build()
         if (isalpha(event)) {
             /* BUILD EACH TRACE IN HERE */
             letter = event;
-            // printf("%c", letter);
-           // insert_at_tail function listops.c
-           insert_at_foot(trace, letter);
+            insert_at_foot(trace, letter);
 
         } else if (event != ','){
             // printf("\nHead: %c, Foot: %c\n", trace->head->actn, trace->foot->actn);
@@ -268,12 +267,101 @@ is_empty_trace(trace_t* trace) {
     return trace->head==NULL;
 }
 
+int
+find_num_events(log_t* log) {
+    /* maybe can implement this when getting each letter to save 1 loop */
+    char* event_list;
+    size_t current_size = INITIAL;
+    int num_distinct_events = 0;
+
+    event_list = (char*)malloc(INITIAL * sizeof(*event_list));
+    assert(event_list);
+
+    int event_present_flag = NOT_FOUND;
+    
+    // Loops over all traces to find all events (chars)
+    for (int i=0; i<log->num_distinct; i++) {
+        event_t* cur_event = log->traces[i]->head;
+
+        // loop thru each trace
+        int end_flag = 0;
+        while(cur_event->next!=NULL || end_flag == 1) {
+            // printf("%d loop. char = %c\n", i, cur_event->actn);
+            // Checks if char is present in found array of chars
+            // no null byte > not a string but simply array of chars
+            // can optimise but dont yet
+            for (int j=0; j<num_distinct_events; j++) {
+                if (cur_event->actn == event_list[j]) {
+                    event_present_flag = FOUND;
+                    // printf("%c found!\n", cur_event->actn);
+                    break;
+                } else {
+                    // printf("%c not found!\n", cur_event->actn);
+                    event_present_flag = NOT_FOUND;
+                }
+            }
+
+            if (event_present_flag == NOT_FOUND) {
+                // printf("%c not found!\n", cur_event->actn);
+                if (num_distinct_events == current_size) {
+                    current_size *= 2;
+                    event_list = (char*)realloc(event_list, current_size*sizeof(*event_list));
+                    assert(event_list);
+                } 
+                event_list[num_distinct_events++] = cur_event->actn;
+            }
+
+            if (end_flag == 1) {
+                break;
+            } else {
+                cur_event = cur_event->next;
+                if (cur_event->next==NULL) {
+                    end_flag = 1;                       // CHANGE OVER FROM MAGIC NUMBER BOZO!!!!!!
+                }
+            }
+        }   
+    }
+    return num_distinct_events;
+}
+
+int
+total_events(log_t* log) {
+    // Go through all traces
+    // Add up length of each trace
+    int sum = 0;
+    for (int i=0; i<log->num_distinct; i++) {
+        int value = get_trace_len(log->traces[i]) * (log->traces[i]->freq);
+        sum += value;
+    }
+    return sum;
+}
+
+int
+get_trace_len(trace_t* trace) {
+    int sum = 0;
+    event_t* current = trace->head;
+    while (current != NULL) {
+        sum++;
+        current = current->next;
+    }
+    return sum;
+}
+
 void
 stage0_printer(log_t* log) {
-    /* Print Header */
+    /* Print Details */
     printf("==STAGE 0============================\n");
-    /* Print number of distinct events */
-
-    /* Print number of distinct traces */
+    printf("Number of distinct events: %d\n", find_num_events(log));
     printf("Number of distinct traces: %d\n", log->num_distinct);
+    printf("Total number of events: %d\n", total_events(log));
+
 }
+
+// for finding how many times each event happens
+// could use the event list created in find_num_events()
+// could then sort it alpabetically to get print order correct
+
+// then.. find how many times each event appears in a distinct trace
+// multiply by frequency > add to linked list in form |EVENT & FREQUENCY| |POINTER -->| etc
+
+
