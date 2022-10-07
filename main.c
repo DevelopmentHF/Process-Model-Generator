@@ -71,8 +71,7 @@ typedef struct {                // an event log is an array of distinct traces
     int      num_distinct;      // the number of distinct traces in this log
     char*    distinct_events;
     int      num_events;          // the capacity of this event log as the number
-    int*     max_freq_traces; // linked list of trace indices in the array of traces that have max freq
-                                //     of  distinct traces it can hold
+
 } log_t;
 
 typedef action_t** DF_t;        // a directly follows relation over actions // 2d array of actions
@@ -91,7 +90,9 @@ int find_num_events(log_t* log);
 int get_trace_len(trace_t* trace);
 void get_event_frequencies(log_t* log);
 int trace_num_details(log_t* log, int* max);
+int char_cmp(const void* l1, const void* l2);
 void print_trace(log_t* log, int max_indice);
+int total_events(log_t* log);
 void stage0_printer(log_t* log);
 
 /* WHERE IT ALL HAPPENS ------------------------------------------------------*/
@@ -109,26 +110,32 @@ main(int argc, char *argv[]) {
 trace_t*
 trace_build() {     // remove this argyment and put it in the log_build()
     // Needs to build a linked list of arbitrary size
+    // printf("Building a new trace!\n");
     trace_t* trace = make_empty_trace();
     char event = getchar();
-
+    // printf("char = %c", event);
     while(event != EOF) {
         char letter;
         if (isalpha(event)) {
             /* BUILD EACH TRACE IN HERE */
             letter = event;
-            insert_at_foot(trace, letter);
+            trace = insert_at_foot(trace, letter);
+            // printf("%c", letter);
 
-        } else if (event != ','){
+        } else if (event == '\n'){ // i.e '\n'
             // return an int to signal to call again in main while loop
+            // printf("\n");
             return trace;
         }
         event = getchar();
+        // printf("\nnew event: %c\n", event);
     }
     if (event == EOF) {
-        // printf("\n");
+        // printf("EOF\n");
         return trace;
     } else {
+        // printf("\n");
+        // printf("NULL\n");
         return NULL;
     }
 }
@@ -146,17 +153,20 @@ log_build(log_t* input_log) {
 
     /* Gets current trace and adds it to the array */
     trace_t* cur_trace = trace_build();
+    int count =0;
     while(is_empty_trace(cur_trace) != 1) {
+        // printf("loop %d\n", count);
+        count++;
         // Check if this trace is already present in the array
         // also could just freq frequency of a thing first to make more efficient
         int found_index;
         int found_flag = is_trace_present(cur_trace, trace_list, num_distinct, &found_index);
         
         if (found_flag == NOT_FOUND) {
-
+            // printf("not found\n");
             cur_trace->freq=1;
             
-            if (num_distinct == current_size) {
+            if (num_distinct == (int)current_size) {
                 current_size *= 2;
                 trace_list = (trace_t**)realloc(trace_list, current_size*sizeof(*trace_list));
                 assert(trace_list);
@@ -169,25 +179,31 @@ log_build(log_t* input_log) {
             if (num_distinct > 1) {
                 for (int i=num_distinct-1; i>0; i--) {
                     // change the guard to compare two linked lists
+                    // printf("here");
                     if (trace_cmp(trace_list[i], trace_list[i-1]) == -1) {
                         // swap the two 
                         trace_t* temp = trace_list[i];
                         trace_list[i] = trace_list[i-1];
                         trace_list[i-1] = temp;
-                        printf("swapped");
+                        // printf("swapped");
+                        
                     } else {
                         break;
                     }
+                    // printf("\nwe made it past here\n");
                 }
             }
 
         } else if (found_flag == FOUND) {
+            // ISSUE HERE > this index has changed
+            // printf("found\n");
             trace_list[found_index]->freq++;
         } 
 
         // Incremental operations
-        // printf("------");
+        // printf("time to build next trace\n");
         cur_trace = trace_build();
+        // printf("trace empty? %d\n",is_empty_trace(cur_trace));
     }
     input_log->traces = trace_list;
     input_log->num_distinct = num_distinct;
@@ -198,19 +214,33 @@ int
 trace_cmp(trace_t* t1, trace_t* t2) {
     event_t* cur_event1 = t1->head;
     event_t* cur_event2 = t2->head;
-
+    // printf("we made it here\n");
     // traverses the LL's and checks
-    while (cur_event1->next != NULL || cur_event2->next != NULL) {
+    // does not work for diff lengths
+    // printf("letter = %c\tletter2 = %c", cur_event1->actn, cur_event2->actn);
+    while (cur_event1 != NULL && cur_event2 != NULL) {
+        // printf("in here");
+        // printf("\nletter = %c\tletter2 = %c", cur_event1->actn, cur_event2->actn);
         if(cur_event1->actn > cur_event2->actn) {
             return 1;
         } else if (cur_event1->actn < cur_event2->actn) {
             return -1;
         } else {
+            // printf("\nstill equal\n");
             cur_event1 = cur_event1->next;
             cur_event2 = cur_event2->next;
         }
     }
+    // printf("issue");
     // One more check for final nodes
+    if (cur_event1 == NULL && cur_event2 != NULL) {
+        return -1;
+    } else if (cur_event1 != NULL && cur_event2 == NULL) {
+        return 1;
+    } else if (cur_event1 == NULL && cur_event2 == NULL) {
+        return 0;
+    }
+
     if(cur_event1->actn > cur_event2->actn) {
         return 1;
     } else if (cur_event1->actn < cur_event2->actn) {
@@ -272,17 +302,29 @@ is_trace_present(trace_t* trace, trace_t** list, int num_traces, int* index) {
         event_t* checker_event=checker_trace->head;
 
         while (trace_event!=NULL && checker_event!=NULL) {
-            
+            // equal_flag = EQUAL; // THIS CODE IS BREAKING AND SAYING EQUAL WHEN IT ISNT
             if (trace_event->actn != checker_event->actn) {
                 equal_flag = NOT_EQUAL;
+                // if (trace_event->next==NULL && checker_event->next!=NULL) {break;}
                 break;
-            } else {
-                trace_event = trace_event->next;
-                checker_event = checker_event->next;
-                equal_flag = EQUAL;
-            }
+            } //else {
+            trace_event = trace_event->next;
+            checker_event = checker_event->next;
+            //     // could be issue here with different length trace
+            //     equal_flag = EQUAL;
+            // }
         }
-       
+
+        if (trace_event == NULL && checker_event == NULL) {
+            equal_flag = EQUAL;
+        }
+        // need to check if it broke early due to one of the traces hitting null
+        // if (!trace_event && checker_event!=NULL) { // trace_event==NULL && checker_event!=NULL
+        //     equal_flag = NOT_EQUAL;
+        // } else if (trace_event!=NULL && !checker_event) {// trace_event!=NULL && checker_event==NULL
+        //     equal_flag = NOT_EQUAL;
+        // }
+
         if (equal_flag == EQUAL) {
             *index = i;
             return FOUND;
@@ -333,7 +375,7 @@ find_num_events(log_t* log) {
 
             if (event_present_flag == NOT_FOUND) {
                 // printf("%c not found!\n", cur_event->actn);
-                if (num_distinct_events == current_size) {
+                if (num_distinct_events == (int)current_size) {
                     current_size *= 2;
                     event_list = (char*)realloc(event_list, current_size*sizeof(*event_list));
                     assert(event_list);
@@ -389,10 +431,36 @@ get_event_frequencies(log_t* log) {
     // then.. find how many times each event appears in a distinct trace
     // multiply by frequency 
     for (int i=0; i<log->num_events; i++) {
-        printf("Distinct Letter [%d]: %c\n", i, log->distinct_events[i]);
+        // SORT DISTINCT EVENTS ARRAY
+        qsort(log->distinct_events, log->num_events, sizeof(char), char_cmp);
+        // printf("Distinct Letter [%d]: %c\n", i, log->distinct_events[i]);
+        char letter = log->distinct_events[i];
         // Now check each trace for how many times its present
-        
+        int sum = 0;
+        for (int j=0; j<log->num_distinct; j++) {
+            int num = 0;
+            trace_t* cur_trace = log->traces[j];
+            event_t* cur_event = cur_trace->head;
+            while(cur_event->next != NULL) {
+                if (cur_event->actn == log->distinct_events[i]) {
+                    num++;
+                }
+                cur_event = cur_event->next;
+            }
+            // check last node
+            if (cur_event->actn == log->distinct_events[i]) {
+                    num++;
+                }
+            sum += num * log->traces[j]->freq;
+        }
+        printf("%c =",letter);
+        printf(" %d\n", sum);
     }
+}
+
+int
+char_cmp(const void* l1, const void* l2) {
+    return *(char*)l1 - *(char*)l2;
 }
 
 int
@@ -400,7 +468,6 @@ trace_num_details(log_t* log, int* max) {
     int sum = 0, max_freq = 0;
     for (int i=0; i<log->num_distinct; i++) {
         int cur_freq = log->traces[i]->freq;
-        printf("cur freq = %d    max freq = %d\n", cur_freq, max_freq);
         if (cur_freq > max_freq) {
             max_freq = cur_freq;
             // SEE NOTE AT BOTTOM
