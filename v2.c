@@ -33,8 +33,8 @@
   Student General Misconduct may arise regardless of whether or not I personally
   make use of such solutions or sought benefit from such actions.
 
-  Signed by: [Enter your full name and student number here before submission]
-  Dated:     [Enter the date that you "signed" the declaration]
+  Signed by: Henry Fielding -- 1356291
+  Dated:     03/10/2022
 
 */
 #include <stdio.h>
@@ -55,7 +55,7 @@ typedef unsigned int action_t;  // an action is identified by an integer
 
 typedef struct event event_t;   // an event ...
 struct event {                  // ... is composed of ...
-    action_t actn;              // ... an action that triggered it and ...
+    char actn;              // ... an action that triggered it and ...
     event_t* next;              // ... a pointer to the next event in the trace
 };
 
@@ -71,6 +71,8 @@ typedef struct {                // an event log is an array of distinct traces
     int      ndtr;              // the number of distinct traces in this log
     int      cpct;              // the capacity of this event log as the number
                                 //     of  distinct traces it can hold
+	char* events;        // list of distinct events
+    int      nevnt;         // number of distinct events
 } log_t;
 
 typedef action_t** DF_t;        // a directly follows relation over actions
@@ -84,17 +86,21 @@ log_t log_build();
 int is_trace_present(trace_t input_trace, trace_t* list, int ndtr, int* located_index);
 int identical_traces(event_t* input, event_t* checker);
 int trace_cmp(trace_t* t1, trace_t* t2);
+log_t find_num_events(log_t log);
+int get_trace_len(trace_t trace);
+int total_events(log_t* log);
+int trace_num_details(log_t* log, int* max);
+void stage0_printer(log_t* log);
 
 /* WHERE IT ALL HAPPENS ------------------------------------------------------*/
 int
 main(int argc, char *argv[]) {
+
     log_t log;
     log = log_build();
-   
-    for (int i = 0; i<log.ndtr; i++) {
-        printf("freq %d = %d\n", i, log.trcs[i].freq);
-    }
-
+    log = find_num_events(log);
+    stage0_printer(&log);
+    
     return EXIT_SUCCESS;        // remember, algorithms are fun!!!
 }
 
@@ -188,7 +194,7 @@ log_build() {
             cur_trace.freq = 1;
             
             /* Check if we need to re-size the array of traces */
-            if (ndtr == current_size) {
+            if (ndtr == (int)current_size) {
                 current_size *= 2;
                 trace_list = (trace_t*)realloc(trace_list, current_size * sizeof(*trace_list));
                 assert(trace_list);
@@ -288,4 +294,95 @@ trace_cmp(trace_t* t1, trace_t* t2) {
     } 
     
     return 0;
+}
+
+log_t
+find_num_events(log_t log) {
+    /* Initialise variables */
+    size_t current_size = INITIAL;
+    int num_distinct = 0, event_presence = NOT_FOUND;
+
+    /* Initialise malloc'd list of distinct events */
+    log.events = (char*)malloc(INITIAL * sizeof(*log.events));
+    assert(log.events);
+
+    /* Loop over list of traces */
+    for (int i=0; i<log.ndtr; i++) {
+        event_t* current_event = log.trcs[i].head;
+        /* Goes through each traces*/
+        while (current_event != NULL) {
+            event_presence = NOT_FOUND;
+            /* Now check if event matches a found event */
+            for (int j=0; j<num_distinct; j++) {
+                if (current_event->actn == log.events[j]) {
+                    event_presence = FOUND;
+                    break;
+                } 
+            }
+
+            /* Adds event to array of events if its first time being seen */
+            if (event_presence == NOT_FOUND) {
+                /* Check if there is room to add the event */
+                if (num_distinct == (int)current_size) {
+                    current_size *= 2;
+                    log.events = (char*)realloc(log.events, current_size*sizeof(*log.events));
+                    assert(log.events);
+                }
+                /* Add the event to the array */
+                log.events[num_distinct++] = current_event->actn;
+            }
+
+            /* Increment as standard for end of while loop */
+            current_event = current_event->next;
+        }
+    }
+    log.nevnt = num_distinct;
+    return log;
+}
+
+int
+get_trace_len(trace_t trace) {
+    int count = 0;
+    /* Loop over the trace and increment a counter */
+    event_t* current = trace.head;
+    while (current != NULL) {
+        count++;
+        current = current->next;
+    }
+    return count;
+}
+
+int
+total_events(log_t* log) {
+    /* Loop over each trace */
+    int total_sum = 0;
+    for (int i=0; i<log->ndtr; i++) {
+        total_sum += (get_trace_len(log->trcs[i]) * (log->trcs[i].freq));
+    }
+    return total_sum;
+}
+
+int
+trace_num_details(log_t* log, int* max) {
+    int sum = 0, max_freq = 0;
+    for (int i=0; i<log->ndtr; i++) {
+        int cur_freq = log->trcs[i].freq;
+        if (cur_freq > max_freq) {
+            max_freq = cur_freq;
+            *max = max_freq;
+        }
+        sum += cur_freq;
+    }
+    return sum;
+}
+
+void stage0_printer(log_t* log) {
+    int max_frequency;
+    printf("==STAGE 0============================\n");
+    printf("Number of distinct events: %d\n", log->nevnt);
+    printf("Number of distinct traces: %d\n", log->ndtr);
+    printf("Total number of events: %d\n", total_events(log));
+    printf("Total number of traces: %d\n", trace_num_details(log, &max_frequency));
+    
+
 }
