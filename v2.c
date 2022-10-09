@@ -75,8 +75,15 @@ typedef struct {                // an event log is an array of distinct traces
     int      nevnt;         // number of distinct events
 } log_t;
 
+typedef struct {
+    char actn1;
+    char actn2;
+    int freq;
+} rel_t;
+
 typedef action_t** DF_t;        // a directly follows relation over actions
 
+/*-----------------------------------------------------------------------------*/
 /* Stage 0 Prototypes*/
 trace_t* trace_build();
 trace_t* make_empty_trace(void);
@@ -94,16 +101,45 @@ void print_trace(log_t* log, int indice);
 void get_event_freq(log_t* log);
 int char_cmp(const void* l1, const void* l2);
 void stage0_printer(log_t* log);
+/* Stage 1 Prototypes */
+rel_t* rel_build(log_t* log);
 
 /* WHERE IT ALL HAPPENS ------------------------------------------------------*/
 int
 main(int argc, char *argv[]) {
 
+    /* ----- Stage 0 ----- */
     log_t log;
     log = log_build();
     log = find_num_events(log);
     stage0_printer(&log);
     
+    /* ----- Stage 1 ----- */
+    /* Initialise array of directly follows relationships */
+    rel_t* relationships;
+    relationships = rel_build(&log);
+	
+	/* Print letters across top */
+	printf("==STAGE 1============================\n");
+	for (int i=0; i<log.nevnt; i++) {
+		printf("\t%c", log.events[i]);
+	}
+	
+	printf("\n");
+	
+	/* Debug test */
+	for (int i=0; i<log.nevnt * log.nevnt; i++) {
+		
+		if (i % log.nevnt == 0) {
+			printf("\n");
+			printf("%c\t", relationships[i].actn1);
+		}
+		
+		printf("%c%c\t", relationships[i].actn1, relationships[i].actn2);
+	}
+
+
+
     return EXIT_SUCCESS;        // remember, algorithms are fun!!!
 }
 
@@ -440,4 +476,28 @@ void stage0_printer(log_t* log) {
         }
     }
     get_event_freq(log);
+}
+
+rel_t*
+rel_build(log_t* log) {
+    /* Initialise array of DF relationships to later return */
+	size_t max_size = log->nevnt * log->nevnt; 	// Only nvent^2 possible pairings 
+    rel_t* relationships = malloc(max_size * sizeof(*relationships));
+	
+    /* Loop through each pairing of characters */
+	int count = 0;
+    for (int i=0; i<log->nevnt; i++) {
+        for (int j=0; j<log->nevnt; j++) {
+            rel_t current_relationship;
+			
+			/* Set values */
+			current_relationship.freq = 0;
+			current_relationship.actn1 = log->events[i];
+			current_relationship.actn2 = log->events[j];
+			
+			relationships[count++] = current_relationship;
+			
+        }
+    }
+    return relationships;
 }
