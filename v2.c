@@ -90,6 +90,9 @@ log_t find_num_events(log_t log);
 int get_trace_len(trace_t trace);
 int total_events(log_t* log);
 int trace_num_details(log_t* log, int* max);
+void print_trace(log_t* log, int indice);
+void get_event_freq(log_t* log);
+int char_cmp(const void* l1, const void* l2);
 void stage0_printer(log_t* log);
 
 /* WHERE IT ALL HAPPENS ------------------------------------------------------*/
@@ -357,6 +360,7 @@ total_events(log_t* log) {
     /* Loop over each trace */
     int total_sum = 0;
     for (int i=0; i<log->ndtr; i++) {
+        /* Sum each length of trace multiplied by its frequency */
         total_sum += (get_trace_len(log->trcs[i]) * (log->trcs[i].freq));
     }
     return total_sum;
@@ -364,9 +368,11 @@ total_events(log_t* log) {
 
 int
 trace_num_details(log_t* log, int* max) {
+    /* Get the total number of traces, and the maximum trace frequency */
     int sum = 0, max_freq = 0;
     for (int i=0; i<log->ndtr; i++) {
         int cur_freq = log->trcs[i].freq;
+        /* Standard maximum counter notation */
         if (cur_freq > max_freq) {
             max_freq = cur_freq;
             *max = max_freq;
@@ -376,6 +382,48 @@ trace_num_details(log_t* log, int* max) {
     return sum;
 }
 
+void
+print_trace(log_t* log, int indice) {
+    trace_t trace = log->trcs[indice];
+    /* Traverse the linked list, printing each character */
+    event_t* cur_event = trace.head;
+    while(cur_event!= NULL) {
+        printf("%c", cur_event->actn);
+        cur_event = cur_event->next;
+    }
+    printf("\n");
+}
+
+void
+get_event_freq(log_t* log) {
+    /* First sort the array of distinct events */
+    qsort(log->events, log->nevnt, sizeof(char), char_cmp);
+    for (int i=0; i<log->nevnt; i++) {
+        /* Get each letter */
+        char letter = log->events[i];
+        /* Now sum its frequencies in the list of traces */
+        int sum = 0;    // Number of appearances multiplied by trace nums
+        for (int j=0; j<log->ndtr; j++) {
+            int value = 0;  // Number of times it appears in one trace
+            event_t* current_event = log->trcs[j].head;
+            /* Traverse the list */
+            while (current_event != NULL) {
+                if (current_event->actn == letter) {
+                    value++;
+                }
+                current_event = current_event->next;
+            }
+            sum += value * log->trcs[j].freq;
+        }
+        printf("%c = %d\n", letter, sum);
+    }
+}
+
+int
+char_cmp(const void* l1, const void* l2) {
+    return *(char*)l1 - *(char*)l2;
+}
+
 void stage0_printer(log_t* log) {
     int max_frequency;
     printf("==STAGE 0============================\n");
@@ -383,6 +431,13 @@ void stage0_printer(log_t* log) {
     printf("Number of distinct traces: %d\n", log->ndtr);
     printf("Total number of events: %d\n", total_events(log));
     printf("Total number of traces: %d\n", trace_num_details(log, &max_frequency));
-    
+    printf("Most frequent trace frequency: %d\n", max_frequency);
 
+    // GO through array of LL's. if it has max freq, print it
+    for (int i=0; i<log->ndtr; i++) {
+        if (log->trcs[i].freq == max_frequency) {
+            print_trace(log, i);
+        }
+    }
+    get_event_freq(log);
 }
