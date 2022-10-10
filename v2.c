@@ -103,6 +103,8 @@ int char_cmp(const void* l1, const void* l2);
 void stage0_printer(log_t* log);
 /* Stage 1 Prototypes */
 rel_t* rel_build(log_t* log);
+void get_relationship_freq(rel_t* relationships, log_t* log);
+int is_rel_present(rel_t relationship, trace_t* trace);
 
 /* WHERE IT ALL HAPPENS ------------------------------------------------------*/
 int
@@ -114,6 +116,8 @@ main(int argc, char *argv[]) {
     log = find_num_events(log);
     stage0_printer(&log);
     
+
+
     /* ----- Stage 1 ----- */
     /* Initialise array of directly follows relationships */
     rel_t* relationships;
@@ -124,9 +128,11 @@ main(int argc, char *argv[]) {
 	for (int i=0; i<log.nevnt; i++) {
 		printf("\t%c", log.events[i]);
 	}
-	
 	printf("\n");
 	
+    /* Now get relationship frequencies */
+    get_relationship_freq(relationships, &log);
+
 	/* Debug test */
 	for (int i=0; i<log.nevnt * log.nevnt; i++) {
 		
@@ -135,8 +141,9 @@ main(int argc, char *argv[]) {
 			printf("%c\t", relationships[i].actn1);
 		}
 		
-		printf("%c%c\t", relationships[i].actn1, relationships[i].actn2);
+		printf("%d\t", relationships[i].freq);
 	}
+	
 
 
 
@@ -478,6 +485,8 @@ void stage0_printer(log_t* log) {
     get_event_freq(log);
 }
 
+/* Stage 1 Functions */
+
 rel_t*
 rel_build(log_t* log) {
     /* Initialise array of DF relationships to later return */
@@ -500,4 +509,38 @@ rel_build(log_t* log) {
         }
     }
     return relationships;
+}
+
+void
+get_relationship_freq(rel_t* relationships, log_t* log) {
+    /* Get current relationship */
+    for (int i=0; i<log->nevnt * log->nevnt; i++) {
+        /* Loop over each trace and find if the current relationship occurs */
+        for (int j=0; j<log->ndtr; j++) {
+            
+            trace_t cur_trace = log->trcs[j];
+            /* Check if relationship is present in the current trace */
+            if (is_rel_present(relationships[i], &cur_trace) == FOUND) {
+                relationships[i].freq+=cur_trace.freq;
+            }
+        }
+    }
+}
+
+int
+is_rel_present(rel_t relationship, trace_t* trace) {
+    /* Traverse the trace */
+    event_t* cur_event1 = trace->head;
+    event_t* cur_event2 = cur_event1->next;
+
+    while (cur_event2 != NULL) {
+        /* Check if pattern matches*/
+        if ((relationship.actn1 == cur_event1->actn) && (relationship.actn2 == cur_event2->actn)) {
+            return FOUND;
+        }
+        /* Incemental operations for while loop */
+        cur_event1 = cur_event2;
+        cur_event2 = cur_event2->next;
+    }
+    return NOT_FOUND;
 }
