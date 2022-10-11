@@ -105,6 +105,7 @@ void stage0_printer(log_t* log);
 rel_t* rel_build(log_t* log);
 void get_relationship_freq(rel_t* relationships, log_t* log);
 int is_rel_present(rel_t relationship, trace_t* trace);
+void relationship_freq_printer(rel_t* relationships, log_t* log);
 
 /* WHERE IT ALL HAPPENS ------------------------------------------------------*/
 int
@@ -123,30 +124,14 @@ main(int argc, char *argv[]) {
     rel_t* relationships;
     relationships = rel_build(&log);
 	
-	/* Print letters across top */
-	printf("==STAGE 1============================\n");
-	for (int i=0; i<log.nevnt; i++) {
-		printf("\t%c", log.events[i]);
-	}
-	printf("\n");
-	
-    /* Now get relationship frequencies */
+	/* Print first bit of stage 1 */
+	printf("==STAGE 1============================\n     ");
     get_relationship_freq(relationships, &log);
+    relationship_freq_printer(relationships, &log);
 
-	/* Debug test */
-	for (int i=0; i<log.nevnt * log.nevnt; i++) {
-		
-		if (i % log.nevnt == 0) {
-			printf("\n");
-			printf("%c\t", relationships[i].actn1);
-		}
-		
-		printf("%d\t", relationships[i].freq);
-	}
-	
+    printf("\n-------------------------------------\n");
 
-
-
+    
     return EXIT_SUCCESS;        // remember, algorithms are fun!!!
 }
 
@@ -517,7 +502,7 @@ get_relationship_freq(rel_t* relationships, log_t* log) {
     for (int i=0; i<log->nevnt * log->nevnt; i++) {
         /* Loop over each trace and find if the current relationship occurs */
         for (int j=0; j<log->ndtr; j++) {
-            
+
             trace_t cur_trace = log->trcs[j];
             /* Check if relationship is present in the current trace */
             if (is_rel_present(relationships[i], &cur_trace) == FOUND) {
@@ -544,3 +529,24 @@ is_rel_present(rel_t relationship, trace_t* trace) {
     }
     return NOT_FOUND;
 }
+
+void
+relationship_freq_printer(rel_t* relationships, log_t* log) {
+    /* Print the event header row */
+    for (int i=0; i<log->nevnt; i++) {
+		printf("%5c", log->events[i]);
+	}
+	printf("\n");
+
+    /* Iterate through */
+    for (int i=0; i<log->nevnt * log->nevnt; i++) {
+		
+		if (i % log->nevnt == 0) {
+			if(i!=0) {printf("\n");}    // formatting 
+			printf("%5c", relationships[i].actn1);
+		}
+		
+		printf("%5d", relationships[i].freq);
+	}
+}
+
