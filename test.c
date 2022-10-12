@@ -56,7 +56,7 @@ typedef unsigned int action_t;  // an action is identified by an integer
 
 typedef struct event event_t;   // an event ...
 struct event {                  // ... is composed of ...
-    char actn;              // ... an action that triggered it and ...
+    int actn;              // ... an action that triggered it and ...
     event_t* next;              // ... a pointer to the next event in the trace
 };
 
@@ -67,8 +67,8 @@ typedef struct {                // a trace is a linked list of events
 } trace_t;
 
 typedef struct {
-    char actn1;
-    char actn2;
+    int actn1;
+    int actn2;
     int freq;
     int weight;
 } rel_t;
@@ -79,12 +79,8 @@ typedef struct {                // an event log is an array of distinct traces
     int      ndtr;              // the number of distinct traces in this log
     int      cpct;              // the capacity of this event log as the number
                                 //     of  distinct traces it can hold
-	char* events;        // list of distinct events
+	int* events;        // list of distinct events
     int      nevnt;         // number of distinct events
-    rel_t* potential_candidates;
-    int num_candidates;
-    rel_t* seq_events;
-    int seq_counter;
 } log_t;
 
 
@@ -95,7 +91,7 @@ typedef action_t** DF_t;        // a directly follows relation over actions
 /* Stage 0 Prototypes*/
 trace_t* trace_build();
 trace_t* make_empty_trace(void);
-trace_t* insert_at_foot(trace_t* trace, char letter);
+trace_t* insert_at_foot(trace_t* trace, int letter);
 int is_empty_trace(trace_t* trace);
 log_t log_build();
 int is_trace_present(trace_t input_trace, trace_t* list, int ndtr, int* located_index);
@@ -107,15 +103,14 @@ int total_events(log_t* log);
 int trace_num_details(log_t* log, int* max);
 void print_trace(log_t* log, int indice);
 void get_event_freq(log_t* log);
-int char_cmp(const void* l1, const void* l2);
+int int_cmp(const void* l1, const void* l2);
 void stage0_printer(log_t* log);
 /* Stage 1 Prototypes */
 rel_t* rel_build(log_t* log);
 void get_relationship_freq(rel_t* relationships, log_t* log);
 int is_rel_present(rel_t relationship, trace_t* trace);
 void relationship_freq_printer(rel_t* relationships, log_t* log);
-rel_t* find_seq_candidates(rel_t* relationships, log_t* log);
-rel_t find_max_candidate(log_t* log);
+
 
 /* WHERE IT ALL HAPPENS ------------------------------------------------------*/
 int
@@ -133,7 +128,6 @@ main(int argc, char *argv[]) {
     /* Initialise array of directly follows relationships */
     rel_t* relationships;
     relationships = rel_build(&log);
-	log.seq_counter = 256;
 
 	/* Print first bit of stage 1 */
 	printf("==STAGE 1============================\n     ");
@@ -141,20 +135,7 @@ main(int argc, char *argv[]) {
     relationship_freq_printer(relationships, &log);
 
     printf("\n-------------------------------------\n");
-    /* Find all candidate sequential patterns */
-    log.potential_candidates = find_seq_candidates(relationships, &log);
-
-
-    rel_t max_candidate = find_max_candidate(&log);
-    printf("%c%c is the max candidate: weight = %d\n", max_candidate.actn1, max_candidate.actn2, max_candidate.weight);
-
-    /* Now need to act on this candidate */
-    /* Add it to the list of chosen candidates */
-    size_t current_size = INITIAL;
-    int seqs = 0;
-    log.seq_events = (rel_t*)malloc(INITIAL * sizeof(*log.seq_events));
-    assert(log.seq_events);
-
+   
     
     return EXIT_SUCCESS;        // remember, algorithms are fun!!!
 }
@@ -164,16 +145,16 @@ trace_build() {
     /* Get pointer to malloc'd empty linked list (trace)*/
     trace_t* trace = make_empty_trace();
     /* Get first character from input text */
-    char event = getchar();
+    int event = getchar();
     
     /* Loop over all characters until the end of the input file */
     while(event != EOF) {
         /* Deals with case where the character is a letter*/
-        if (isalpha(event)) {
+        if (isalpha((char)event)) {
             /* Insert the character to end of linked list */
             trace = insert_at_foot(trace, event);
         /* Skips over commas and returns at end of trace*/
-        } else if (event == '\n'){
+        } else if ((char)event == '\n'){
             return trace;
         }
         /* Get the next character */
@@ -199,7 +180,7 @@ make_empty_trace(void) {
    "Programming, Problem Solving, and Abstraction with C"
 */
 trace_t*
-insert_at_foot(trace_t* trace, char letter) {
+insert_at_foot(trace_t* trace, int letter) {
     event_t* new;
 
     new = (event_t*)malloc(sizeof(*new));
@@ -358,7 +339,7 @@ find_num_events(log_t log) {
     int num_distinct = 0, event_presence = NOT_FOUND;
 
     /* Initialise malloc'd list of distinct events */
-    log.events = (char*)malloc(INITIAL * sizeof(*log.events));
+    log.events = (int*)malloc(INITIAL * sizeof(*log.events));
     assert(log.events);
 
     /* Loop over list of traces */
@@ -380,7 +361,7 @@ find_num_events(log_t log) {
                 /* Check if there is room to add the event */
                 if (num_distinct == (int)current_size) {
                     current_size *= 2;
-                    log.events = (char*)realloc(log.events, current_size*sizeof(*log.events));
+                    log.events = (int*)realloc(log.events, current_size*sizeof(*log.events));
                     assert(log.events);
                 }
                 /* Add the event to the array */
@@ -449,10 +430,10 @@ print_trace(log_t* log, int indice) {
 void
 get_event_freq(log_t* log) {
     /* First sort the array of distinct events */
-    qsort(log->events, log->nevnt, sizeof(char), char_cmp);
+    qsort(log->events, log->nevnt, sizeof(int), int_cmp);
     for (int i=0; i<log->nevnt; i++) {
         /* Get each letter */
-        char letter = log->events[i];
+        int letter = log->events[i];
         /* Now sum its frequencies in the list of traces */
         int sum = 0;    // Number of appearances multiplied by trace nums
         for (int j=0; j<log->ndtr; j++) {
@@ -467,13 +448,13 @@ get_event_freq(log_t* log) {
             }
             sum += value * log->trcs[j].freq;
         }
-        printf("%c = %d\n", letter, sum);
+        printf("%c = %d\n", (char)letter, sum);
     }
 }
 
 int
-char_cmp(const void* l1, const void* l2) {
-    return *(char*)l1 - *(char*)l2;
+int_cmp(const void* l1, const void* l2) {
+    return *(int*)l1 - *(int*)l2;
 }
 
 void stage0_printer(log_t* log) {
@@ -574,65 +555,3 @@ relationship_freq_printer(rel_t* relationships, log_t* log) {
 	}
 }
 
-rel_t*
-find_seq_candidates(rel_t* relationships, log_t* log) {
-    /* Initialise candidates array */
-    rel_t* candidates;
-    int num_candidates=0;
-    size_t current_size = INITIAL;
-    candidates = (rel_t*)malloc(INITIAL * sizeof(*candidates));
-    assert(candidates);
-
-    /* Loop through the relationships */
-    for (int i=0; i<log->nevnt * log->nevnt; i++) {
-        /* Now, we have current relationship struct */
-        if (relationships[i].actn1 != relationships[i].actn2) { // dont use the diagonal line y=-x
-            /* Find its 'complement' */
-            for (int j=0; log->nevnt * log->nevnt; j++) {
-                if (relationships[i].actn1 == relationships[j].actn2 && relationships[i].actn2 == relationships[j].actn1) {
-                    /* Complement found */
-                    /* Check that sup(x,y) > sup(y,x) */
-                    if (relationships[i].freq > relationships[j].freq) {
-                        int cur_pd = (100 * abs(relationships[i].freq - relationships[j].freq)) / relationships[i].freq;
-                        int weight = abs(50 - cur_pd) * relationships[i].freq;
-                        if (cur_pd > 70) {
-                            /* Add this to array of candidates */
-                            /* first, check if there is room in the array of candidate relations */
-                            if (num_candidates == (int)current_size) {
-                                current_size *= 2;
-                                candidates = (rel_t*)realloc(candidates, current_size*sizeof(*candidates));
-                                assert(candidates);
-                            }
-                            relationships[i].weight = weight;
-                            candidates[num_candidates++] = relationships[i];
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-    log->num_candidates = num_candidates;
-    return candidates;
-}
-
-rel_t
-find_max_candidate(log_t* log) {
-    int max_weight=0;
-    for (int i=0; i<log->num_candidates; i++) {
-        rel_t cur_candidate = log->potential_candidates[i];
-        if (cur_candidate.weight > max_weight) {
-            max_weight = cur_candidate.weight;
-        }
-    }
-    rel_t max_candidate;
-
-    /* Act on the candidate with this weight */
-    for (int i=0; i<log->num_candidates; i++) {
-        if (log->potential_candidates[i].weight == max_weight) {
-            /* Found max weighted relation */
-            max_candidate = log->potential_candidates[i];
-        }
-    }
-    return max_candidate;
-}
