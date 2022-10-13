@@ -772,10 +772,9 @@ free_list(trace_t* list) {
 	assert(list!=NULL);
 
 	curr = list->head;
-	while (curr) {
+	while (curr != NULL) {
 		prev = curr;
 		curr = curr->next;
 		free(prev);
 	}
-	free(list);
 }
