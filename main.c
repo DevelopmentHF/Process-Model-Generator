@@ -113,6 +113,9 @@ int is_rel_present(rel_t relationship, trace_t* trace);
 void relationship_freq_printer(rel_t* relationships, log_t* log);
 rel_t* find_seq_candidates(rel_t* relationships, log_t* log, int* num_candidates);
 void print_distinct_traces(log_t* log);
+int max_candidate_index(rel_t* candidates, int num_candidates);
+void change_to_abstract(log_t* log, rel_t* max_candidate, int abstract_num);
+void remove_repeated_abstracts(log_t* log, int abstract_num);
 
 
 /* WHERE IT ALL HAPPENS ------------------------------------------------------*/
@@ -126,88 +129,52 @@ main(int argc, char *argv[]) {
     stage0_printer(&log);
     
 
-
     /* ----- Stage 1 ----- */
     /* Initialise array of directly follows relationships */
     rel_t* relationships;
     relationships = rel_build(&log);
-
-	/* Print first bit of stage 1 */
-	printf("==STAGE 1============================\n     ");
     get_relationship_freq(relationships, &log);
-    relationship_freq_printer(relationships, &log);
-
-    printf("\n-------------------------------------\n");
    
     /* Initialise for start of while loop -> go till theres no candidates left */
-    int num_candidates = 0, abstract_num = 256;
+    int num_candidates = 0, abstract_num = 256, num_loops = 0;
     rel_t* candidates = find_seq_candidates(relationships, &log, &num_candidates);
 
     while (num_candidates > 0) {
+        if (num_loops > 0) {
+            printf("=====================================\n     ");
+        } else {
+            printf("==STAGE 1============================\n     ");
+        }
+        relationship_freq_printer(relationships, &log);
 
         /* Find the maximum candidate available */
-        int max_weight = 0, max_index;
-        for (int i=0; i<num_candidates; i++) {
-            if (candidates[i].weight > max_weight) {
-                max_weight = candidates[i].weight;
-                max_index = i;
-            }
-        }
+        int max_index = max_candidate_index(candidates, num_candidates);
         rel_t max_candidate = candidates[max_index];
         printf("%d = SEQ(%c,%c)\n", abstract_num, max_candidate.actn1, max_candidate.actn2);
 
         /* Get the amount of events removed */
         printf("Number of events removed: %d\n", max_candidate.freq);
 
-        /* Now, alter the event log to be 256,c,d */
-        /* Go through each trace */
-      
-        
-        for (int i=0; i<log.ndtr; i++) {
-            event_t* current_event = log.trcs[i].head;
-            while (current_event != NULL) {
-                // Will have to check last node to see if it needs to be removed
-                if (current_event->actn == max_candidate.actn1 || current_event->actn == max_candidate.actn2) {
-                    current_event->actn = abstract_num;
-                }
-                current_event = current_event->next;
-            }
-        }
+        /* Change all occurences of candidate events to be the abstract number */
+        change_to_abstract(&log, &max_candidate, abstract_num);
 
-        print_distinct_traces(&log);
         /* Now, check if there is a repeated abstract numbers (next to each other) */
-        /* If so, remove */     // ie. 256->256->c->d ==== 256->c->d
-        for (int i=0; i<log.ndtr; i++) {
-            event_t* current_event = log.trcs[i].head;
-            event_t* next = current_event->next;
-            while (next != NULL && current_event != NULL) {
-                // Will have to check last node to see if it needs to be removed
-                if (current_event->actn == abstract_num && next->actn == abstract_num) {
-                    current_event->next = next->next;
-                }
-                current_event = next->next;
-                if (current_event != NULL) {
-                    next = current_event->next;
-                }
-            }
-        }
-        print_distinct_traces(&log);
-
-        log = find_num_events(log);
-        get_event_freq(&log);
-        printf("=====================================\n     ");
-        relationships = rel_build(&log);
-        get_relationship_freq(relationships, &log);
-        relationship_freq_printer(relationships, &log);
-        printf("\n-------------------------------------\n");
+        remove_repeated_abstracts(&log, abstract_num);
 
         /* Incremental operations */
+        log = find_num_events(log);
+        get_event_freq(&log);
+        relationships = rel_build(&log);
+        get_relationship_freq(relationships, &log);
         num_candidates = 0;
         abstract_num++;
         candidates = find_seq_candidates(relationships, &log, &num_candidates);
+        num_loops++;
     }
 
 
+    /* ----- Stage 2 ----- */
+    printf("==STAGE 2============================\n");
     return EXIT_SUCCESS;        // remember, algorithms are fun!!!
 }
 
@@ -638,6 +605,7 @@ relationship_freq_printer(rel_t* relationships, log_t* log) {
 		
 		printf("%5d", relationships[i].freq);
 	}
+    printf("\n-------------------------------------\n");
 }
 
 rel_t*
@@ -697,3 +665,56 @@ print_distinct_traces(log_t* log) {
         printf("\n");
     }
 }
+
+int
+max_candidate_index(rel_t* candidates, int num_candidates) {
+    /* Finds the index of the candidate with max weight -> in alphabetic order */
+    int max_weight = 0, max_index;
+    for (int i=0; i<num_candidates; i++) {
+        if (candidates[i].weight > max_weight) {
+            max_weight = candidates[i].weight;
+            max_index = i;
+        }
+    }
+    return max_index;
+}
+
+void
+change_to_abstract(log_t* log, rel_t* max_candidate, int abstract_num) {
+    /* Change all occurences of candidate events to be the abstract number */
+    for (int i=0; i<log->ndtr; i++) {
+        event_t* current_event = log->trcs[i].head;
+        while (current_event != NULL) {
+            if (current_event->actn == max_candidate->actn1 || current_event->actn == max_candidate->actn2) {
+                current_event->actn = abstract_num;
+            }
+            current_event = current_event->next;
+        }
+    }
+} 
+
+void
+remove_repeated_abstracts(log_t* log, int abstract_num) {
+    /* Now, check if there is a repeated abstract numbers (next to each other) */
+    /* If so, remove */     // ie. 256->256->c->d ==== 256->c->d
+    for(int i=0; i<log->ndtr; i++) {
+        event_t* current_event = log->trcs[i].head;
+        event_t* next = current_event->next;
+        while (next != NULL && current_event != NULL) {
+            if (current_event->actn == abstract_num && next->actn == abstract_num) {
+                current_event->next = next->next;
+                current_event = next->next;
+                if (current_event != NULL) {
+                    next = current_event->next;
+                }   
+            /* Deal with naunce case at end of LL */
+            } else {
+                current_event = current_event->next;
+                if (current_event != NULL) {
+                    next = current_event->next;
+                }
+            }
+        }
+    }
+}
+
