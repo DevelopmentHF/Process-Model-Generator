@@ -45,18 +45,17 @@
 
 /* #DEFINE'S -----------------------------------------------------------------*/
 #define GOOD_LUCK   "GOOD LUCK CLASS!!!\n"      // good luck message
-#define INITIAL (2)
-#define FOUND (1)
-#define NOT_FOUND (0)
-#define EQUAL (1)
-#define NOT_EQUAL (0)
+#define INITIAL (2)             // initial size of a malloc'd array
+#define FOUND (1)               // used when an object has been located
+#define NOT_FOUND (0)           // ...    ...      ...     not been located
+#define EQUAL (1)               // used to be explicit when two things are equal
+#define NOT_EQUAL (0)           // used to be explicit when two things != 
 
 /* TYPE DEFINITIONS ----------------------------------------------------------*/
-typedef unsigned int action_t;  // an action is identified by an integer
 
 typedef struct event event_t;   // an event ...
 struct event {                  // ... is composed of ...
-    int actn;              // ... an action that triggered it and ...
+    int actn;                   // ... an action that triggered it and ...
     event_t* next;              // ... a pointer to the next event in the trace
 };
 
@@ -67,26 +66,19 @@ typedef struct {                // a trace is a linked list of events
 } trace_t;
 
 typedef struct {
-    int actn1;
-    int actn2;
-    int freq;
-    int weight;
+    int actn1;                  // the 'first' action
+    int actn2;                  // the action that follows the 'first action'
+    int freq;                   // how many times this relationship appears
+    int weight;                 // total weight of this relationship
 } rel_t;
 
 typedef struct {                // an event log is an array of distinct traces
                                 //     sorted lexicographically
     trace_t* trcs;              // an array of traces
     int      ndtr;              // the number of distinct traces in this log
-    int      cpct;              // the capacity of this event log as the number
-                                //     of  distinct traces it can hold
-	int* events;        // list of distinct events
-    int      nevnt;         // number of distinct events
+	int* events;                // list of distinct events
+    int      nevnt;             // number of distinct events
 } log_t;
-
-
-
-
-typedef action_t** DF_t;        // a directly follows relation over actions
 
 /*-----------------------------------------------------------------------------*/
 /* Stage 0 Prototypes*/
@@ -95,7 +87,8 @@ trace_t* make_empty_trace(void);
 trace_t* insert_at_foot(trace_t* trace, int letter);
 int is_empty_trace(trace_t* trace);
 log_t log_build();
-int is_trace_present(trace_t input_trace, trace_t* list, int ndtr, int* located_index);
+int is_trace_present(
+        trace_t input_trace, trace_t* list, int ndtr, int* located_index);
 int identical_traces(event_t* input, event_t* checker);
 int trace_cmp(trace_t* t1, trace_t* t2);
 log_t find_num_events(log_t log);
@@ -111,11 +104,12 @@ rel_t* rel_build(log_t* log);
 void get_relationship_freq(rel_t* relationships, log_t* log);
 int is_rel_present(rel_t relationship, trace_t* trace);
 void relationship_freq_printer(rel_t* relationships, log_t* log);
-rel_t* find_seq_candidates(rel_t* relationships, log_t* log, int* num_candidates);
-void print_distinct_traces(log_t* log);
+rel_t* find_seq_candidates(
+        rel_t* relationships, log_t* log, int* num_candidates);
 int max_candidate_index(rel_t* candidates, int num_candidates);
 void change_to_abstract(log_t* log, rel_t* max_candidate, int abstract_num);
 void remove_repeated_abstracts(log_t* log, int abstract_num);
+void free_list(trace_t* list);
 
 
 /* WHERE IT ALL HAPPENS ------------------------------------------------------*/
@@ -123,8 +117,10 @@ int
 main(int argc, char *argv[]) {
 
     /* ----- Stage 0 ----- */
+    /* Initialise + build a log of traces to work with */
     log_t log;
     log = log_build();
+    /* Fill the log event data */
     log = find_num_events(log);
     stage0_printer(&log);
     
@@ -135,11 +131,14 @@ main(int argc, char *argv[]) {
     relationships = rel_build(&log);
     get_relationship_freq(relationships, &log);
    
-    /* Initialise for start of while loop -> go till theres no candidates left */
+    /* Initialise for start of while loop */
     int num_candidates = 0, abstract_num = 256, num_loops = 0;
-    rel_t* candidates = find_seq_candidates(relationships, &log, &num_candidates);
+    rel_t* candidates = find_seq_candidates(relationships, 
+        &log, &num_candidates);
 
+    /* Run until there are no more candidate relationships to choose from */
     while (num_candidates > 0) {
+        /* Stage 1 formatting */
         if (num_loops > 0) {
             printf("=====================================\n     ");
         } else {
@@ -147,21 +146,20 @@ main(int argc, char *argv[]) {
         }
         relationship_freq_printer(relationships, &log);
 
-        /* Find the maximum candidate available */
+        /* Find the maximum weighted candidate available */
         int max_index = max_candidate_index(candidates, num_candidates);
         rel_t max_candidate = candidates[max_index];
-        printf("%d = SEQ(%c,%c)\n", abstract_num, max_candidate.actn1, max_candidate.actn2);
+        printf("%d = SEQ(%c,%c)\n", abstract_num, 
+            max_candidate.actn1, max_candidate.actn2);
 
-        /* Get the amount of events removed */
+        /* Get the number of events removed */
         printf("Number of events removed: %d\n", max_candidate.freq);
-
-        /* Change all occurences of candidate events to be the abstract number */
+        /* Change all occurences of candidate events to the abstract number */
         change_to_abstract(&log, &max_candidate, abstract_num);
-
-        /* Now, check if there is a repeated abstract numbers (next to each other) */
+        /* Now, check if there is a repeated abstract numbers */
         remove_repeated_abstracts(&log, abstract_num);
 
-        /* Incremental operations */
+        /* Incremental operations for the end of a while loop */
         log = find_num_events(log);
         get_event_freq(&log);
         relationships = rel_build(&log);
@@ -175,21 +173,43 @@ main(int argc, char *argv[]) {
 
     /* ----- Stage 2 ----- */
     printf("==STAGE 2============================\n");
+
+    /* ----- Free all malloc'd memory */
+    /* Free relationships array */
+    free(relationships);
+    relationships = NULL;
+    /* Free log event list */
+    free(log.events);
+    log.events = NULL;
+    /* Free each linked list of events */
+    for (int i=0; i<log.ndtr; i++) {
+        free_list(&log.trcs[i]);
+    }
+    free(log.trcs);
+    log.trcs = NULL;
+    /* Free distinct events array */
+    free(log.events);
+    log.events = NULL;
+    /* Free candidates array */
+    free(candidates);
+    candidates = NULL;
+    
     return EXIT_SUCCESS;        // remember, algorithms are fun!!!
 }
 
+/* Builds a linked lists of events from the input file to form a trace */
 trace_t*
 trace_build() {     
-    /* Get pointer to malloc'd empty linked list (trace)*/
+    /* Initialise empty linked list (trace) */
     trace_t* trace = make_empty_trace();
-    /* Get first character from input text */
+    /* Get first character from input file */
     int event = getchar();
     
     /* Loop over all characters until the end of the input file */
     while(event != EOF) {
-        /* Deals with case where the character is a letter*/
+        /* Deals with case where the event is valid */
         if (isalpha((char)event)) {
-            /* Insert the character to end of linked list */
+            /* Insert event to end of linked list */
             trace = insert_at_foot(trace, event);
         /* Skips over commas and returns at end of trace*/
         } else if ((char)event == '\n'){
@@ -237,12 +257,14 @@ insert_at_foot(trace_t* trace, int letter) {
     return trace;
 }
 
+/* Checks if a trace is empty */
 int
 is_empty_trace(trace_t* trace) {
     assert(trace != NULL);
     return trace->head==NULL;
 }
 
+/* Fills in a log with data regarding traces previously built */
 log_t
 log_build() {
     log_t log;
@@ -252,7 +274,7 @@ log_build() {
     int ndtr = 0;
 
     /* Build traces dynamic array */
-    trace_list = (trace_t*)malloc(INITIAL*sizeof(*trace_list)); // allocate space for trace_t's
+    trace_list = (trace_t*)malloc(INITIAL*sizeof(*trace_list)); 
     assert(trace_list);
 
     /* Gets current trace */
@@ -263,14 +285,16 @@ log_build() {
         int located_index;          // Where in the list of traces it was found
 
         /* Check if trace has already been found */
-        if (is_trace_present(cur_trace, trace_list, ndtr, &located_index) == NOT_FOUND) {
+        if (is_trace_present(cur_trace, trace_list, ndtr, &located_index)
+             == NOT_FOUND) {
             /* First time this element has been seen */
             cur_trace.freq = 1;
             
             /* Check if we need to re-size the array of traces */
             if (ndtr == (int)current_size) {
                 current_size *= 2;
-                trace_list = (trace_t*)realloc(trace_list, current_size * sizeof(*trace_list));
+                trace_list = (trace_t*)realloc(trace_list, 
+                    current_size * sizeof(*trace_list));
                 assert(trace_list);
             }
 
@@ -278,7 +302,7 @@ log_build() {
             trace_list[ndtr++] = cur_trace;
 
             /* Perform insertion sort on the newly added element */
-            if (ndtr > 1) {             // No need to sort an array with one element
+            if (ndtr > 1) {        // No need to sort an array with one element
                 for (int i=ndtr-1; i>0; i--) {
                     if (trace_cmp(&trace_list[i], &trace_list[i-1]) == -1) {
                         /* Swap the 'bigger trace' with the smaller */
@@ -298,13 +322,16 @@ log_build() {
         /* Incremental operation required at end of while loop */
         cur_trace = *trace_build();
     }
+    /* Assign values to the log */
     log.trcs = trace_list;
     log.ndtr = ndtr;
     return log;
 }
 
+/* Check if a input trace is already contained within the array of traces */
 int
-is_trace_present(trace_t input_trace, trace_t* list, int ndtr, int* located_index) {
+is_trace_present(trace_t input_trace, trace_t* list, int ndtr,
+                int* located_index) {
     /* If list is empty, it must be its first occurence*/
     if (ndtr < 1) {
         return NOT_FOUND;
@@ -325,6 +352,7 @@ is_trace_present(trace_t input_trace, trace_t* list, int ndtr, int* located_inde
     return NOT_FOUND;
 }
 
+/* Checks if 2 traces are the exact same */
 int
 identical_traces(event_t* input, event_t* checker) {
     while (input != NULL && checker != NULL) {
@@ -341,6 +369,7 @@ identical_traces(event_t* input, event_t* checker) {
     return NOT_EQUAL;
 }
 
+/* Compares 2 input traces based on alphabetical ordering of events */
 int
 trace_cmp(trace_t* t1, trace_t* t2) {
     /* Initialises first event to be checked */
@@ -370,6 +399,9 @@ trace_cmp(trace_t* t1, trace_t* t2) {
     return 0;
 }
 
+/* Finds the number of distinct events in a completed input log.
+    Futhermore, it also creates an array of these events and stores
+    it for later use within the log */
 log_t
 find_num_events(log_t log) {
     /* Initialise variables */
@@ -399,7 +431,8 @@ find_num_events(log_t log) {
                 /* Check if there is room to add the event */
                 if (num_distinct == (int)current_size) {
                     current_size *= 2;
-                    log.events = (int*)realloc(log.events, current_size*sizeof(*log.events));
+                    log.events = (int*)realloc(log.events, 
+                        current_size*sizeof(*log.events));
                     assert(log.events);
                 }
                 /* Add the event to the array */
@@ -410,10 +443,12 @@ find_num_events(log_t log) {
             current_event = current_event->next;
         }
     }
+    /* Assign to the log */
     log.nevnt = num_distinct;
     return log;
 }
 
+/* Gets the lenght of a given trace */
 int
 get_trace_len(trace_t trace) {
     int count = 0;
@@ -426,6 +461,7 @@ get_trace_len(trace_t trace) {
     return count;
 }
 
+/* Returns the total number of events in a event log */
 int
 total_events(log_t* log) {
     /* Loop over each trace */
@@ -437,10 +473,11 @@ total_events(log_t* log) {
     return total_sum;
 }
 
+/* Gets the total number of traces, and the maximum trace frequency */
 int
 trace_num_details(log_t* log, int* max) {
-    /* Get the total number of traces, and the maximum trace frequency */
     int sum = 0, max_freq = 0;
+    /* Loop through all traces */
     for (int i=0; i<log->ndtr; i++) {
         int cur_freq = log->trcs[i].freq;
         /* Standard maximum counter notation */
@@ -453,6 +490,7 @@ trace_num_details(log_t* log, int* max) {
     return sum;
 }
 
+/* Prints a given trace out onto the CL */
 void
 print_trace(log_t* log, int indice) {
     trace_t trace = log->trcs[indice];
@@ -465,6 +503,7 @@ print_trace(log_t* log, int indice) {
     printf("\n");
 }
 
+/* Gets the frequency of each distinct event */
 void
 get_event_freq(log_t* log) {
     /* First sort the array of distinct events */
@@ -486,6 +525,7 @@ get_event_freq(log_t* log) {
             }
             sum += value * log->trcs[j].freq;
         }
+        /* Deals with character / integer formatting */
         if (action < 255) {
             printf("%c = %d\n", action, sum);
         } else {
@@ -495,21 +535,24 @@ get_event_freq(log_t* log) {
     }
 }
 
+/* Used to compare 2 integers sizes */
 int
 int_cmp(const void* l1, const void* l2) {
     return *(int*)l1 - *(int*)l2;
 }
 
+/* Prints out all necessary details for Stage 0 */
 void stage0_printer(log_t* log) {
     int max_frequency;
     printf("==STAGE 0============================\n");
     printf("Number of distinct events: %d\n", log->nevnt);
     printf("Number of distinct traces: %d\n", log->ndtr);
     printf("Total number of events: %d\n", total_events(log));
-    printf("Total number of traces: %d\n", trace_num_details(log, &max_frequency));
+    printf("Total number of traces: %d\n", trace_num_details(
+            log, &max_frequency));
     printf("Most frequent trace frequency: %d\n", max_frequency);
 
-    // GO through array of LL's. if it has max freq, print it
+    /* Go through array of traces; if it has max freq, print it */
     for (int i=0; i<log->ndtr; i++) {
         if (log->trcs[i].freq == max_frequency) {
             print_trace(log, i);
@@ -520,10 +563,11 @@ void stage0_printer(log_t* log) {
 
 /* Stage 1 Functions */
 
+/* Builds an array of relationships from the given event log */
 rel_t*
 rel_build(log_t* log) {
     /* Initialise array of DF relationships to later return */
-	size_t max_size = log->nevnt * log->nevnt; 	// Only nvent^2 possible pairings 
+	size_t max_size = log->nevnt * log->nevnt; 	//  nvent^2 possible pairings
     rel_t* relationships = malloc(max_size * sizeof(*relationships));
 	
     /* Loop through each pairing of characters */
@@ -544,14 +588,15 @@ rel_build(log_t* log) {
     return relationships;
 }
 
+/* Gets the frequency of each relationship in the relationship array */
 void
 get_relationship_freq(rel_t* relationships, log_t* log) {
     /* Get current relationship */
     for (int i=0; i<log->nevnt * log->nevnt; i++) {
         /* Loop over each trace and find if the current relationship occurs */
         for (int j=0; j<log->ndtr; j++) {
-
             trace_t cur_trace = log->trcs[j];
+
             /* Check if relationship is present in the current trace */
             if (is_rel_present(relationships[i], &cur_trace) == FOUND) {
                 relationships[i].freq+=cur_trace.freq;
@@ -560,6 +605,7 @@ get_relationship_freq(rel_t* relationships, log_t* log) {
     }
 }
 
+/* Check if a given relationship is already present in list of relationships */
 int
 is_rel_present(rel_t relationship, trace_t* trace) {
     /* Traverse the trace */
@@ -568,7 +614,8 @@ is_rel_present(rel_t relationship, trace_t* trace) {
 
     while (cur_event2 != NULL) {
         /* Check if pattern matches*/
-        if ((relationship.actn1 == cur_event1->actn) && (relationship.actn2 == cur_event2->actn)) {
+        if ((relationship.actn1 == cur_event1->actn) &&
+             (relationship.actn2 == cur_event2->actn)) {
             return FOUND;
         }
         /* Incemental operations for while loop */
@@ -578,6 +625,7 @@ is_rel_present(rel_t relationship, trace_t* trace) {
     return NOT_FOUND;
 }
 
+/* Prints out frequency's of relationships matrix */
 void
 relationship_freq_printer(rel_t* relationships, log_t* log) {
     /* Print the event header row */
@@ -590,11 +638,11 @@ relationship_freq_printer(rel_t* relationships, log_t* log) {
 	}
 	printf("\n");
 
-    /* Iterate through */
+    /* Iterate through and print each value */
     for (int i=0; i<log->nevnt * log->nevnt; i++) {
 		
 		if (i % log->nevnt == 0) {
-			if(i!=0) {printf("\n");}    // formatting 
+			if(i!=0) {printf("\n");}    // formatting for start of matrix
             if (relationships[i].actn1 < 255) {
                 printf("%5c", relationships[i].actn1);
             } else {
@@ -608,6 +656,7 @@ relationship_freq_printer(rel_t* relationships, log_t* log) {
     printf("\n-------------------------------------\n");
 }
 
+/* Creates an array of potential candidate relationships to be removed */
 rel_t*
 find_seq_candidates(rel_t* relationships, log_t* log, int* num_candidates) {
     /* Initialise candidates array */
@@ -619,22 +668,29 @@ find_seq_candidates(rel_t* relationships, log_t* log, int* num_candidates) {
     /* Loop through the relationships */
     for (int i=0; i<((log->nevnt) * (log->nevnt)); i++) {
         /* Now, we have current relationship struct */
-        if (relationships[i].actn1 != relationships[i].actn2) { // dont use the diagonal line y=-x
+        // dont use the diagonal line y=-x
+        if (relationships[i].actn1 != relationships[i].actn2) { 
             /* Find its 'complement' */
             for (int j=0; j<((log->nevnt) * (log->nevnt)); j++) {
-                if (relationships[i].actn1 == relationships[j].actn2 && relationships[i].actn2 == relationships[j].actn1) {
+                if (relationships[i].actn1 == relationships[j].actn2 &&
+                     relationships[i].actn2 == relationships[j].actn1) {
                     /* Complement found */
                     /* Check that sup(x,y) > sup(y,x) */
-                    if (relationships[i].freq > relationships[j].freq && relationships[i].actn1 < 255 && relationships[j].actn1) {
-                        int cur_pd = (100 * abs(relationships[i].freq - relationships[j].freq)) / relationships[i].freq;
-                        // printf("cur pd = %d", cur_pd);
+                    if (relationships[i].freq > relationships[j].freq &&
+                        relationships[i].actn1 < 255 && relationships[j].actn1){
+                        int cur_pd = (100 * abs(relationships[i].freq -
+                             relationships[j].freq))
+                             / relationships[i].freq;
                         int weight = abs(50 - cur_pd) * relationships[i].freq;
+
                         if (cur_pd > 70) {
                             /* Add this to array of candidates */
-                            /* first, check if there is room in the array of candidate relations */
+                            /* first, check if there is room in the array of
+                                 candidate relations */
                             if (*num_candidates == (int)current_size) {
                                 current_size *= 2;
-                                candidates = (rel_t*)realloc(candidates, current_size*sizeof(*candidates));
+                                candidates = (rel_t*)realloc(candidates, 
+                                    current_size*sizeof(*candidates));
                                 assert(candidates);
                             }
                             relationships[i].weight = weight;
@@ -650,26 +706,11 @@ find_seq_candidates(rel_t* relationships, log_t* log, int* num_candidates) {
     return candidates;
 }
 
-void
-print_distinct_traces(log_t* log) {
-    for (int i=0; i<log->ndtr; i++) {
-        event_t* current_event = log->trcs[i].head;
-        while (current_event != NULL) {
-            if (current_event->actn > 255) {
-                printf("%d", current_event->actn);
-            } else {
-                printf("%c", current_event->actn);
-            }
-            current_event = current_event->next;
-        }
-        printf("\n");
-    }
-}
-
+/* Returns the index of the candidate with the highest weight */
 int
 max_candidate_index(rel_t* candidates, int num_candidates) {
-    /* Finds the index of the candidate with max weight -> in alphabetic order */
     int max_weight = 0, max_index;
+    /* Traverse the candidates */
     for (int i=0; i<num_candidates; i++) {
         if (candidates[i].weight > max_weight) {
             max_weight = candidates[i].weight;
@@ -679,13 +720,17 @@ max_candidate_index(rel_t* candidates, int num_candidates) {
     return max_index;
 }
 
+/* Change all occurences of candidate events to be the abstract number */
 void
 change_to_abstract(log_t* log, rel_t* max_candidate, int abstract_num) {
-    /* Change all occurences of candidate events to be the abstract number */
+    /* Loop through all traces */
     for (int i=0; i<log->ndtr; i++) {
         event_t* current_event = log->trcs[i].head;
         while (current_event != NULL) {
-            if (current_event->actn == max_candidate->actn1 || current_event->actn == max_candidate->actn2) {
+            /* If this should be abstract, repalce its value */
+            if (current_event->actn == max_candidate->actn1 || 
+                current_event->actn == max_candidate->actn2) {
+
                 current_event->actn = abstract_num;
             }
             current_event = current_event->next;
@@ -693,21 +738,23 @@ change_to_abstract(log_t* log, rel_t* max_candidate, int abstract_num) {
     }
 } 
 
+/* Removes subsequences of repeated abstract events in a trace */
 void
 remove_repeated_abstracts(log_t* log, int abstract_num) {
-    /* Now, check if there is a repeated abstract numbers (next to each other) */
-    /* If so, remove */     // ie. 256->256->c->d ==== 256->c->d
+    /* Loop through all traces */
     for(int i=0; i<log->ndtr; i++) {
         event_t* current_event = log->trcs[i].head;
         event_t* next = current_event->next;
         while (next != NULL && current_event != NULL) {
-            if (current_event->actn == abstract_num && next->actn == abstract_num) {
+            /* Checks if two side by side events are the same */
+            if (current_event->actn == abstract_num && 
+                next->actn == abstract_num) {
                 current_event->next = next->next;
                 current_event = next->next;
                 if (current_event != NULL) {
                     next = current_event->next;
                 }   
-            /* Deal with naunce case at end of LL */
+            /* Deal with niche case at end of a linked list */
             } else {
                 current_event = current_event->next;
                 if (current_event != NULL) {
@@ -718,3 +765,20 @@ remove_repeated_abstracts(log_t* log, int abstract_num) {
     }
 }
 
+/* free_list() modified from Alistair Moffat, as an example for the book
+   "Programming, Problem Solving, and Abstraction with C"
+*/
+void
+free_list(trace_t* list) {
+	event_t* curr;
+    event_t* prev;
+	assert(list!=NULL);
+
+	curr = list->head;
+	while (curr) {
+		prev = curr;
+		curr = curr->next;
+		free(prev);
+	}
+	free(list);
+}
