@@ -187,9 +187,6 @@ main(int argc, char *argv[]) {
     }
     free(log.trcs);
     log.trcs = NULL;
-    /* Free distinct events array */
-    free(log.events);
-    log.events = NULL;
     /* Free candidates array */
     free(candidates);
     candidates = NULL;
